@@ -1,0 +1,5 @@
+# Default Configurations
+
+# workers: max number of spawned workers in the cluster
+# will be limited by number of CPUs
+workers = 10
