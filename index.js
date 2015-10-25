@@ -31,7 +31,11 @@ function spawnWorkers () {
 }
 
 let assignTasks = function () {
-  let balancer = new Balancer(Object.keys(cluster.workers).length);
+  let nodes = Object.keys(cluster.workers).length;
+  let balancer = new Balancer({
+    nodes: nodes,
+    floor: 1
+  });
   let taskList = R.clone(tasks);
   let registerTask = {action: 'register'};
 
@@ -39,15 +43,8 @@ let assignTasks = function () {
     let newTask = R.merge(registerTask,{
       task: taskList.shift()
     });
-    while (true) {
-      let nextId = balancer.next();
-      if (cluster.workers[nextId]){
-        cluster.workers[nextId].send(newTask);
-        break;
-      } else {
-        console.log('still waiting');
-      }
-    }
+    let nextId = balancer.next();
+    cluster.workers[nextId].send(newTask);
   }
 };
 
