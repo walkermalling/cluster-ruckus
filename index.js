@@ -5,6 +5,7 @@ var nconf     = require('./config');
 var os        = require('os');
 var R         = require('ramda');
 var util      = require('util');
+var chalk     = require('chalk');
 
 const CPUS    = os.cpus().length - 1;
 const WORKERS = nconf.get('workers');
@@ -17,11 +18,21 @@ cluster.setupMaster({
 
 cluster.on('exit', function(worker, code, signal) {
   console.log(`Worker ${worker} died`);
+  // redistribute jobs
 });
 
 cluster.on('online', function(worker) {
   console.log(`Worker ${worker.id} is online`);
+  // redistribute jobs (but only in instances after init has completed?)
 });
+
+cluster.on('message', function (msg) {
+  console.log(chalk.red(util.inspect(msg)));
+});
+
+function getWorkers () {
+  return Object.keys(cluster.workers);
+}
 
 function spawnWorkers () {
   let workers = R.lte(WORKERS, CPUS) ? WORKERS : CPUS;
@@ -30,29 +41,34 @@ function spawnWorkers () {
   }
 }
 
+function broadcast (msg) {
+  for (var id in cluster.workers) {
+    cluster.workers[id].send(msg);
+  }
+}
+
 let assignTasks = function () {
-  let nodes = Object.keys(cluster.workers).length;
+  console.log('assigning tasks');
   let balancer = new Balancer({
-    nodes: nodes,
+    nodes: getWorkers().length,
     floor: 1
   });
+
   let taskList = R.clone(tasks);
-  let registerTask = {action: 'register'};
+  let registerTask = {action: 'REGISTER'};
 
   while (taskList.length > 0) {
     let newTask = R.merge(registerTask,{
       task: taskList.shift()
     });
-    let nextId = balancer.next();
-    cluster.workers[nextId].send(newTask);
+    cluster.workers[balancer.next()].send(newTask);
   }
 };
 
 // exec
 
 spawnWorkers();
+
 assignTasks();
 
-for (var id in cluster.workers) {
-  cluster.workers[id].send({action: 'report'});
-}
+broadcast({action: 'REPORT'});

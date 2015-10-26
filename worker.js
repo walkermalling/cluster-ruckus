@@ -3,25 +3,25 @@ var cluster   = require('cluster');
 
 let tasks = [];
 
-function registerTask (task) {
-  tasks.push(task);
+function registerTask (msg) {
+  tasks.push(msg.task);
 }
 
 function report () {
-  console.log(`[${cluster.worker.id}]\t${tasks}`);
+  let msg = {
+    id: cluster.worker.id,
+    tasks: tasks
+  };
+  process.send(msg);
 }
 
-function dispatch (msg) {
-  switch (msg.action) {
-    case 'register':
-      registerTask(msg.task);
-      break;
-    case 'report':
-      report();
-      break;
-  }
-}
+let dispatch = {
+  REGISTER: registerTask,
+  REPORT: report
+};
 
 if (cluster.isWorker) {
-  process.on('message', dispatch);
+  process.on('message', msg => {
+    dispatch[msg.action].call(null, msg);
+  });
 }
